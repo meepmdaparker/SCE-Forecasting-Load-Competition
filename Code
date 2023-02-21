@@ -1,0 +1,91 @@
+pip install plotnine
+pip install matplotlib==3.5.0
+import pandas as pd
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn import tree
+import matplotlib
+import matplotlib.pyplot as plt
+import datetime as dt
+from plotnine import *
+from sklearn.model_selection import train_test_split # for splitting the data
+from sklearn.metrics import mean_squared_error # for calculating the cost function
+from sklearn.ensemble import RandomForestRegressor # for building the model
+plt.style.use('ggplot')
+
+
+def rmse(actual,predicted):
+    return round(((actual - predicted)**2).mean()**0.5,2)
+
+def mape(actual,predicted):
+    return round(abs((actual - predicted)/actual).mean()*100,2)
+
+def accuracy(actual,predicted,h=0):
+    n_train = len(actual) - h
+    accuracy_metrics = pd.DataFrame(columns=['RMSE','MAPE(%)'],index=['Training set','Testing set'])
+    accuracy_metrics.loc['Training set','RMSE'] = rmse(actual[:n_train],predicted[:n_train])
+    accuracy_metrics.loc['Training set','MAPE(%)'] = mape(actual[:n_train],predicted[:n_train])
+    if (h>0):
+        accuracy_metrics.loc['Testing set','RMSE'] = rmse(actual[n_train:],predicted[n_train:])
+        accuracy_metrics.loc['Testing set','MAPE(%)'] = mape(actual[n_train:],predicted[n_train:])
+    return accuracy_metrics
+    
+df = pd.read_csv('https://raw.githubusercontent.com/laneyhlc/DSO424/main/CompetitionData.csv')
+
+df.info()
+
+df['Date'] = pd.to_datetime(df['Date'])
+df['Year'] = df['Date'].dt.year
+df['Month'] = df['Date'].dt.month
+df['Day']=df['Date'].dt.day
+df['Hour']=df['Date'].dt.hour
+df['Time'] = list(range(1,len(df)+1))
+
+
+df['DayOfWeek'] = df['Date'].dt.day_name()
+df['MonthOfWeek'] = df['Date'].dt.month_name()
+
+(
+    ggplot(df[:840],aes('Time', 'Load')) + geom_point() + geom_line()
+)
+
+
+(
+    ggplot(df[:],aes('Temperature', 'Load')) + geom_point() 
+)
+
+df2 = df
+
+df2.iloc[35063]
+df3=df2[:35064]
+
+x = df3.drop(['Load', 'Time', 'Prediction'], axis = 1)
+y = df3['Load']
+x_train, x_test, y_train, y_test = train_test_split(x,y,test_size = 12, shuffle = False)
+
+M = RandomForestRegressor(n_estimators=100, max_depth=None, min_samples_split=2, 
+                           min_samples_leaf=1, min_weight_fraction_leaf=0.0, max_features=1, max_leaf_nodes=None, 
+                           min_impurity_decrease=0.0, bootstrap=True, oob_score=False, n_jobs=None, random_state=1, 
+                           verbose=0, warm_start=False, ccp_alpha=0.0, max_samples=None)
+                           
+M.fit(x_train,y_train)
+accuracy(df3['Load'],M.predict(x),h=8784)
+
+df3['M1'] = M.predict(x)
+df3
+X_future = x_train.loc[len(x_train)-8784:,:]
+np.concatenate((M.predict(x_train),M.predict(X_future)))
+
+
+df4 = pd.DataFrame({'Prediction':np.concatenate((M.predict(x_train),M.predict(X_future)))})
+df4['Time'] = list(range(1,len(df4)+1))
+
+(
+    ggplot(df4,aes('Time','Prediction')) + geom_line() + geom_point() + geom_vline(xintercept = len(df4) - 8784 +1, color = 'red')+
+    geom_line(df3,aes('Time','M1'),color='blue')
+
+)
+
+
+
